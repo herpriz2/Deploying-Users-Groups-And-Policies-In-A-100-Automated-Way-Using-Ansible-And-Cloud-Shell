@@ -1,0 +1,33 @@
+---
+
+- name: Creating Networking Admin users in the OCI
+  hosts: localhost
+  collections:
+    - oracle.oci
+  vars:
+    parent_compartment_ocid: "{{ lookup('env', 'PARENT_COMPARTMENT_OCID') }}"
+    group_name: "NetworkingAdmin"
+    domain: "@thecloudbootcamp.com"
+    users:
+      - samantha.colin
+      - diana.smith
+
+  tasks:
+   - name: Validating prerequisites
+     fail:
+       msg: "Variable {{item}} not defined. Please, fix it!"
+     when: item not in ansible_env
+     with_items:
+       - "PARENT_COMPARTMENT_OCID"
+    
+   - name: Getting Group ID
+     oci_identity_group_facts:
+       name: "{{ group_name }}"
+       compartment_id: "{{ parent_compartment_ocid }}"
+     register: result 
+   - set_fact: 
+       group_ocid: "{{ result.groups[0].id }}"
+  
+   - name: Creating users, adding to a group and defining the password
+     include_tasks: "tcb-bmc-iam-creating-users.yaml"
+     loop: "{{ users }}"

@@ -1,0 +1,138 @@
+---
+- name: Creating groups and policies in the Oracle Cloud Infrastructure
+  hosts: localhost
+  collections:
+    - oracle.oci
+  vars:
+    parent_compartment_ocid: "{{ lookup('env', 'PARENT_COMPARTMENT_OCID') }}"
+    compute_compartment_ocid: "{{ lookup('env', 'COMPUTE_COMPARTMENT_OCID') }}"
+    networking_compartment_ocid: "{{ lookup('env', 'NETWORKING_COMPARTMENT_OCID') }}"
+    dba_compartment_ocid: "{{ lookup('env', 'DB_COMPARTMENT_OCID') }}"
+
+    compute_group_name: "ComputeAdmin"
+    networking_group_name: "NetworkingAdmin"
+    dba_group_name: "DBAsAdmin"
+    cloudadm_group_name: "TCBCloudAdmin"
+    operators_group_name: "Operators"
+
+  tasks:
+    - block:
+      - name: Validating  prerequisites
+        fail:
+          msg: "Variable {{item}} not defined. Please, fix it!"
+        when: item not in ansible_env
+        with_items:
+          - "PARENT_COMPARTMENT_OCID"
+          - "COMPUTE_COMPARTMENT_OCID"
+          - "NETWORKING_COMPARTMENT_OCID"
+          - "DB_COMPARTMENT_OCID"
+
+      # Creating Groups
+
+      # Creating ComputeAdmin group
+      - name: Creating a group to manager Compute resources
+        oci_identity_group:
+          name: "{{ compute_group_name }}"
+          compartment_id: "{{ parent_compartment_ocid }}"
+          description: "Group allowed to manage Compute resources in the compartment computeResources"
+        register: result
+      - set_fact:
+          compute_group_ocid: "{{ result.group.id }}"
+
+      # Creating NetworkAdmin group
+      - name: Creating a group to manager Networking resources
+        oci_identity_group:
+          name: "{{ networking_group_name }}"
+          compartment_id: "{{ parent_compartment_ocid }}"
+          description: "Group allowed to manage Networking resources in the compartment networkingResources"
+        register: result
+      - set_fact:
+          networking_group_ocid: "{{ result.group.id }}"
+
+      # Creating DBAsAdmin group
+      - name: Creating a group to manage Database resources
+        oci_identity_group:
+          name: "{{ dba_group_name }}"
+          compartment_id: "{{ parent_compartment_ocid }}"
+          description: "Group allowed to manage DB resources in the compartment dbResources"
+        register: result
+      - set_fact:
+          dba_group_ocid: "{{ result.group.id }}"
+
+      # Creating TCBCloudAdmin group
+      - name: Creating a group to manage all resources in the Tenancy
+        oci_identity_group:
+          name: "{{ cloudadm_group_name }}"
+          compartment_id: "{{ parent_compartment_ocid }}"
+          description: "Group of Cloud Specialist and Solution Architects"
+        register: result
+      - set_fact:
+          cloud_adm_group_ocid: "{{ result.group.id }}"
+
+      # Creating Operators group
+      - name: Creating a group to monitor all resources in the Tenancy
+        oci_identity_group:
+          name: "{{ operators_group_name }}"
+          compartment_id: "{{ parent_compartment_ocid }}"
+          description: "Group in charge to monitor all running resources in the Tenancy"
+        register: result
+      - set_fact:
+          operators_group_ocid: "{{ result.group.id }}"
+
+      # Creting Policies
+
+      # Creating ComputeAdminPolicy
+      - name: Policy assignment for ComputeAdmin group
+        oci_identity_policy:
+          name: "ComputeAdminPolicy"
+          compartment_id: "{{ parent_compartment_ocid }}"
+          description: "Permission to manage Compute resources"
+          statements: ["Allow group {{ compute_group_name }} to manage instance-family in compartment id {{ compute_compartment_ocid }}"]
+        register: result
+      - set_fact:
+          compute_policy_ocid: "{{ result.policy.id }}"
+
+      # Creating NetworkingAdminPolicy
+      - name: Policy assignment for NetworkingAdmin group
+        oci_identity_policy:
+          name: "NetworkingAdminPolicy"
+          compartment_id: "{{ parent_compartment_ocid }}"
+          description: "Permission to manage Networking resources"
+          statements: ["Allow group {{ networking_group_name }} to manage virtual-network-family in compartment id {{ networking_compartment_ocid }}",
+                       "Allow group {{ networking_group_name }} to manage load-balancers in compartment id {{ networking_compartment_ocid }}"]
+        register: result
+      - set_fact:
+          networking_policy_ocid: "{{ result.policy.id }}"
+
+      # Creating DBAsAdminPolicy
+      - name: Policy assignment for DBAsAdmin group
+        oci_identity_policy:
+          name: "DBAsAdminPolicy"
+          compartment_id: "{{ parent_compartment_ocid }}"
+          description: "Permission to manage DB resources"
+          statements: ["Allow group {{ dba_group_name }} to manage database-family in compartment id {{ dba_compartment_ocid }}"]
+        register: result
+      - set_fact:
+          dba_policy_ocid: "{{ result.policy.id }}"
+          
+      # Creating TCBCloudAdminPolicy
+      - name: Policy assignment for TCBCloudAdmin group
+        oci_identity_policy:
+          name: "TCBCloudAdminPolicy"
+          compartment_id: "{{ parent_compartment_ocid }}"
+          description: "Permission to manage all resources in the tenancy"
+          statements: ["Allow group {{ cloudadm_group_name }} to manage all-resources in tenancy"]
+        register: result
+      - set_fact:
+          cloud_adm_policy_ocid: "{{ result.policy.id }}"
+
+      # Creating OperatorsPolicy
+      - name: Policy assignment for Operators group
+        oci_identity_policy:
+          name: "OperatorsPolicy"
+          compartment_id: "{{ parent_compartment_ocid }}"
+          description: "Permission to view and inspect all resources in the Tenancy"
+          statements: ["Allow group {{ operators_group_name }} to inspect all-resources in tenancy"]
+        register: result
+      - set_fact:
+          operators_policy_ocid: "{{ result.policy.id }}"
